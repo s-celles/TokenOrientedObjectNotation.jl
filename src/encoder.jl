@@ -251,8 +251,13 @@ function encode_list_item(value::JsonValue, writer::LineWriter, depth::Int,
             values_str = join_encoded_values(encoded_values, options.delimiter)
             push!(writer, depth, "$(LIST_ITEM_MARKER)$(header) $(values_str)")
         else
-            # Complex array needs its own header
-            encode_array(nothing, value, writer, depth, options)
+            # Complex array needs its own header with list marker
+            header = format_header(nothing, length(value), options.delimiter)
+            push!(writer, depth, "$(LIST_ITEM_MARKER)$(header)")
+            # Encode array contents at depth + 1
+            for item in value
+                encode_list_item(item, writer, depth + 1, options)
+            end
         end
     elseif is_json_object(value)
         # Empty object

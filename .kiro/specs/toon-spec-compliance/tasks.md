@@ -166,7 +166,7 @@
   - Add test cases for all option combinations
   - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.7_
 
-- [ ] 16. Create comprehensive compliance test suite
+- [x] 16. Create comprehensive compliance test suite
   - Create test file for each requirement category
   - Add tests for all examples from TOON specification
   - Add tests for all error conditions from §14
@@ -176,7 +176,7 @@
   - Verify test coverage meets 100% of normative requirements
   - _Requirements: All_
 
-- [ ] 17. Run compliance validation and fix issues
+- [x] 17. Run compliance validation and fix issues
   - Run full test suite and document results
   - Identify any failing tests or non-compliant behavior
   - Fix identified issues
@@ -184,7 +184,7 @@
   - Document any specification ambiguities or edge cases encountered
   - _Requirements: All_
 
-- [ ] 18. Update documentation for full compliance
+- [x] 18. Update documentation for full compliance
   - Update README.md to reflect full v2.0 compliance
   - Update IMPLEMENTATION_STATUS.md with final status
   - Add compliance badge or statement

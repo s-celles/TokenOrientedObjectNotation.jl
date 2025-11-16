@@ -1,12 +1,14 @@
 name = "TOON"
 uuid = "7e1e1c4e-8b9a-4f3d-9c1e-2f3a4b5c6d7e"
-authors = ["TOON Format Organization"]
 version = "0.1.0"
+authors = ["TOON Format Organization"]
 
 [deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
 [compat]
+Documenter = "1.16.0"
 julia = "1.6"
 
 [extras]

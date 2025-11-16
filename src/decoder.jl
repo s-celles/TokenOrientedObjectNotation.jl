@@ -106,8 +106,21 @@ function decode_value_from_lines(cursor::LineCursor, options::DecodeOptions)::Js
             # No colon found - check for common errors in strict mode
             if options.strict
                 # Check if it looks like an array header without colon
-                if occursin('[', content) && occursin(']', content)
-                    error("Missing colon after array header at line $(first_line.lineNumber)")
+                # Only check if it's not a quoted string
+                if !startswith(content, DOUBLE_QUOTE) && occursin('[', content) && occursin(']', content)
+                    # Try to parse as array header to see if it's valid
+                    try
+                        test_header = parse_array_header(content)
+                        if test_header !== nothing
+                            error("Missing colon after array header at line $(first_line.lineNumber)")
+                        end
+                    catch e
+                        # If the error is about missing colon, re-throw it
+                        if isa(e, ErrorException) && occursin("colon", e.msg)
+                            error("Missing colon after array header at line $(first_line.lineNumber)")
+                        end
+                        # Otherwise, not a valid array header, ignore
+                    end
                 end
                 
                 # Check if it looks like a key without colon (has spaces but not quoted)

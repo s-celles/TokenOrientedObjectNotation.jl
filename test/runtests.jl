@@ -23,6 +23,14 @@ using TOON
     include("test_tabular_arrays.jl")
     include("test_objects_as_list_items.jl")
     include("test_options.jl")
+    
+    # Include comprehensive compliance test suites
+    include("test_compliance_requirements.jl")
+    include("test_compliance_roundtrip.jl")
+    include("test_compliance_determinism.jl")
+    include("test_compliance_edge_cases.jl")
+    include("test_compliance_spec_examples.jl")
+    include("test_compliance_errors.jl")
 end
 
 @testset "TOON.jl - Basic Tests" begin
