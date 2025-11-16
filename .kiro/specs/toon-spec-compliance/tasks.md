@@ -143,7 +143,7 @@
   - Add test cases for key folding scenarios and edge cases
   - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
 
-- [ ] 14. Validate and fix path expansion implementation
+- [x] 14. Validate and fix path expansion implementation
   - Review `expand_dotted_key()` in `src/decoder.jl`
   - Verify expansion only occurs when expandPaths="safe"
   - Verify only keys with all IdentifierSegment parts are expanded

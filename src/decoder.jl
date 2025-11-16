@@ -177,6 +177,10 @@ function expand_dotted_key(result::JsonObject, key::String, value::JsonValue, op
 
     if !should_expand
         # No expansion needed - just set the key
+        # But first check if we're overwriting an object in strict mode
+        if options.strict && haskey(result, key) && isa(result[key], JsonObject) && !isa(value, JsonObject)
+            error("Cannot set key '$key': key already exists as object")
+        end
         result[key] = value
         return
     end

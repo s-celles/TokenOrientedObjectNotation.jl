@@ -12,6 +12,7 @@ using TOON
     include("test_scanner.jl")
     include("test_security.jl")
     include("test_folding.jl")
+    include("test_path_expansion.jl")
     include("test_array_headers.jl")
     include("test_delimiter_scoping.jl")
     include("test_indentation.jl")
