@@ -109,7 +109,7 @@
   - Add test cases for all array format scenarios
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-- [ ] 11. Validate and fix tabular array handling
+- [x] 11. Validate and fix tabular array handling
   - Review `encode_tabular_array()` and `decode_tabular_array()` in encoder/decoder
   - Verify field names come from first object's key order
   - Verify one row per object at depth +1
@@ -120,7 +120,7 @@
   - Add test cases for tabular arrays with all delimiters
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
 
-- [ ] 12. Validate and fix objects as list items
+- [x] 12. Validate and fix objects as list items
   - Review `encode_list_item()` in `src/encoder.jl`
   - Review list item decoding in `src/decoder.jl`
   - Verify empty object emits single "-"

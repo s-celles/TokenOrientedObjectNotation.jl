@@ -567,19 +567,40 @@ function decode_list_array(cursor::LineCursor, options::DecodeOptions,
     while has_more_lines(cursor)
         line = peek_line(cursor)
 
-        # Check if line starts with list marker
-        if !startswith(line.content, LIST_ITEM_MARKER)
+        # Check if line starts with list marker (either "- " or just "-")
+        if !startswith(line.content, "-")
             break
         end
 
         # Parse list item
-        after_marker = String(strip(line.content[length(LIST_ITEM_MARKER)+1:end]))
+        # Handle both "- " (with content) and "-" (empty object)
+        if line.content == "-"
+            # Empty object - just "-"
+            after_marker = ""
+        elseif startswith(line.content, LIST_ITEM_MARKER)
+            # Normal list item with "- "
+            after_marker = String(strip(line.content[length(LIST_ITEM_MARKER)+1:end]))
+        else
+            # Not a list item (e.g., "-5" or "-abc")
+            break
+        end
 
         # Check what kind of item it is
         if isempty(after_marker)
-            # Empty object
+            # Could be empty object or object with fields at depth +1
+            hyphen_line_depth = line.depth
             advance_line!(cursor)
-            push!(result, Dict{String, Any}())
+            
+            # Check if there are fields at depth +1
+            next_line = peek_line(cursor)
+            if next_line !== nothing && next_line.depth == hyphen_line_depth + 1 && !startswith(next_line.content, "-")
+                # Object with fields at depth +1
+                obj = decode_object(cursor, hyphen_line_depth, options)
+                push!(result, obj)
+            else
+                # Empty object
+                push!(result, Dict{String, Any}())
+            end
         else
             # Try to parse as array header
             item_header = try
@@ -616,10 +637,116 @@ function decode_list_array(cursor::LineCursor, options::DecodeOptions,
                 colon_pos = find_first_unquoted(after_marker, ':')
 
                 if colon_pos !== nothing
-                    # Object item
+                    # Object item with first field on hyphen line
+                    key_str = strip(after_marker[1:colon_pos-1])
+                    value_str = strip(after_marker[colon_pos+1:end])
+                    
+                    first_key = parse_key(key_str)
+                    hyphen_line_depth = line.depth
+                    
                     advance_line!(cursor)
-                    # TODO: implement object as list item parsing
-                    push!(result, Dict{String, Any}())
+                    
+                    obj = JsonObject()
+                    
+                    # Parse the first field value
+                    if !isempty(value_str)
+                        # Primitive value on hyphen line
+                        obj[first_key] = parse_primitive(value_str)
+                    else
+                        # Nested object or array - check next line
+                        next_line = peek_line(cursor)
+                        
+                        if next_line !== nothing && next_line.depth == hyphen_line_depth + 2
+                            # Nested object at depth +2
+                            obj[first_key] = decode_object(cursor, hyphen_line_depth + 1, options)
+                        else
+                            # Empty value
+                            obj[first_key] = Dict{String, Any}()
+                        end
+                    end
+                    
+                    # Parse remaining fields at depth +1
+                    while has_more_lines(cursor)
+                        next_line = peek_line(cursor)
+                        
+                        # Remaining fields should be at depth +1 relative to hyphen
+                        if next_line.depth != hyphen_line_depth + 1
+                            break
+                        end
+                        
+                        # Check if it's a list item marker (next item in array)
+                        if startswith(next_line.content, LIST_ITEM_MARKER)
+                            break
+                        end
+                        
+                        # Parse key-value pair
+                        field_colon_pos = find_first_unquoted(next_line.content, ':')
+                        if field_colon_pos === nothing
+                            if options.strict
+                                error("Missing colon after key at line $(next_line.lineNumber)")
+                            end
+                            advance_line!(cursor)
+                            continue
+                        end
+                        
+                        field_key_str = strip(next_line.content[1:field_colon_pos-1])
+                        field_value_str = strip(next_line.content[field_colon_pos+1:end])
+                        
+                        # Check if the key contains an array header
+                        field_header = try
+                            parse_array_header(field_key_str * ":")
+                        catch
+                            nothing
+                        end
+                        
+                        if field_header !== nothing && field_header.key !== nothing
+                            # Key contains array syntax like "tags[2]:"
+                            field_key = field_header.key
+                            advance_line!(cursor)
+                            
+                            if !isempty(field_value_str)
+                                # Inline array data
+                                obj[field_key] = decode_inline_array_data(field_value_str, field_header, options)
+                            else
+                                # Multiline array data
+                                obj[field_key] = decode_multiline_array_data(cursor, field_header, options)
+                            end
+                        else
+                            # Regular key-value pair
+                            field_key = parse_key(field_key_str)
+                            advance_line!(cursor)
+                            
+                            if !isempty(field_value_str)
+                                # Primitive value
+                                obj[field_key] = parse_primitive(field_value_str)
+                            else
+                                # Nested object or array
+                                nested_line = peek_line(cursor)
+                                
+                                if nested_line !== nothing && nested_line.depth > hyphen_line_depth + 1
+                                    # Check if it's an array header
+                                    nested_header = try
+                                        parse_array_header(nested_line.content)
+                                    catch
+                                        nothing
+                                    end
+                                    
+                                    if nested_header !== nothing
+                                        # Array value
+                                        obj[field_key] = decode_array(cursor, options, nested_header)
+                                    else
+                                        # Nested object
+                                        obj[field_key] = decode_object(cursor, hyphen_line_depth + 1, options)
+                                    end
+                                else
+                                    # Empty value
+                                    obj[field_key] = Dict{String, Any}()
+                                end
+                            end
+                        end
+                    end
+                    
+                    push!(result, obj)
                 else
                     # Primitive item
                     push!(result, parse_primitive(after_marker))

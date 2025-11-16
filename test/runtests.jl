@@ -19,6 +19,8 @@ using TOON
     include("test_root_forms.jl")
     include("test_object_encoding.jl")
     include("test_array_format_selection.jl")
+    include("test_tabular_arrays.jl")
+    include("test_objects_as_list_items.jl")
 end
 
 @testset "TOON.jl - Basic Tests" begin
