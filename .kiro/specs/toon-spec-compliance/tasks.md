@@ -65,7 +65,7 @@
   - Add test cases for indentation validation and whitespace rules
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 9.7, 9.8_
 
-- [ ] 7. Implement and validate strict mode error handling
+- [x] 7. Implement and validate strict mode error handling
   - Review all error conditions in decoder against §14 checklist
   - Implement missing strict mode validations
   - Verify array count mismatch errors (inline, list, tabular)
@@ -79,7 +79,7 @@
   - Add test cases for all strict mode error conditions
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6, 10.7_
 
-- [ ] 8. Validate and fix root form detection
+- [x] 8. Validate and fix root form detection
   - Review `decode_value_from_lines()` in `src/decoder.jl`
   - Verify root array detection (first depth-0 line is valid array header with colon)
   - Verify single primitive detection (exactly one non-empty line, not array header, not key-value)
@@ -89,7 +89,7 @@
   - Add test cases for all root form scenarios
   - _Requirements: 11.1, 11.2, 11.3, 11.4_
 
-- [ ] 9. Validate and fix object encoding and decoding
+- [x] 9. Validate and fix object encoding and decoding
   - Review `encode_object()` and `decode_object()` in encoder/decoder
   - Verify primitive fields use "key: value" with exactly one space after colon
   - Verify nested/empty objects use "key:" on its own line
@@ -99,7 +99,7 @@
   - Add test cases for nested objects and empty objects
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 10. Validate and fix array format selection
+- [x] 10. Validate and fix array format selection
   - Review `encode_array()` in `src/encoder.jl`
   - Verify primitive arrays use inline format
   - Verify uniform object arrays use tabular format

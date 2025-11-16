@@ -16,6 +16,9 @@ using TOON
     include("test_delimiter_scoping.jl")
     include("test_indentation.jl")
     include("test_strict_mode.jl")
+    include("test_root_forms.jl")
+    include("test_object_encoding.jl")
+    include("test_array_format_selection.jl")
 end
 
 @testset "TOON.jl - Basic Tests" begin

@@ -1,0 +1,232 @@
+# Copyright (c) 2025 TOON Format Organization
+# SPDX-License-Identifier: MIT
+
+using Test
+using TOON
+
+@testset "Object Encoding and Decoding (Requirements 5.1-5.5)" begin
+    @testset "Requirement 5.1: Primitive fields with exactly one space after colon" begin
+        # Simple primitive fields
+        result = TOON.encode(Dict("name" => "Alice", "age" => 30))
+        @test occursin("name: Alice", result)
+        @test occursin("age: 30", result)
+        @test !occursin("name:  Alice", result)  # No double space
+        @test !occursin("name:Alice", result)    # No missing space
+        
+        # Various primitive types
+        obj = Dict(
+            "str" => "hello",
+            "num" => 42,
+            "float" => 3.14,
+            "bool" => true,
+            "null" => nothing
+        )
+        result = TOON.encode(obj)
+        @test occursin("str: hello", result)
+        @test occursin("num: 42", result)
+        @test occursin("float: 3.14", result)
+        @test occursin("bool: true", result)
+        @test occursin("null: null", result)
+        
+        # Verify exactly one space (no extra spaces)
+        lines = split(result, '\n')
+        for line in lines
+            if occursin(':', line)
+                # Find the colon position
+                colon_idx = findfirst(':', line)
+                if colon_idx !== nothing && colon_idx < length(line)
+                    # Check that there's exactly one space after colon
+                    after_colon = line[colon_idx+1:end]
+                    @test startswith(after_colon, ' ')
+                    @test !startswith(after_colon, "  ")  # Not two spaces
+                end
+            end
+        end
+    end
+    
+    @testset "Requirement 5.2: Nested/empty objects use 'key:' on its own line" begin
+        # Nested object
+        obj = Dict("user" => Dict("name" => "Bob"))
+        result = TOON.encode(obj)
+        lines = split(result, '\n')
+        
+        # Find the "user:" line
+        user_line = findfirst(l -> occursin("user:", l), lines)
+        @test user_line !== nothing
+        @test strip(lines[user_line]) == "user:"
+        
+        # Empty object
+        obj = Dict("empty" => Dict{String, Any}())
+        result = TOON.encode(obj)
+        @test occursin("empty:", result)
+        
+        # Multiple nested levels
+        obj = Dict("a" => Dict("b" => Dict("c" => 1)))
+        result = TOON.encode(obj)
+        @test occursin("a:", result)
+        @test occursin("b:", result)
+        @test occursin("c: 1", result)
+    end
+    
+    @testset "Requirement 5.3: Nested fields appear at depth +1" begin
+        # Single level nesting
+        obj = Dict("parent" => Dict("child" => "value"))
+        result = TOON.encode(obj)
+        lines = split(result, '\n')
+        
+        # parent: should be at depth 0 (no indent)
+        parent_line = findfirst(l -> occursin("parent:", l), lines)
+        @test parent_line !== nothing
+        @test !startswith(lines[parent_line], ' ')
+        
+        # child: value should be at depth 1 (2 spaces by default)
+        child_line = findfirst(l -> occursin("child: value", l), lines)
+        @test child_line !== nothing
+        @test startswith(lines[child_line], "  ")
+        @test !startswith(lines[child_line], "    ")  # Not 4 spaces
+        
+        # Multiple levels
+        obj = Dict("a" => Dict("b" => Dict("c" => Dict("d" => 1))))
+        result = TOON.encode(obj)
+        lines = split(result, '\n')
+        
+        # Check indentation increases by 2 spaces per level
+        a_line = findfirst(l -> occursin("a:", l), lines)
+        b_line = findfirst(l -> occursin("b:", l), lines)
+        c_line = findfirst(l -> occursin("c:", l), lines)
+        d_line = findfirst(l -> occursin("d: 1", l), lines)
+        
+        @test !startswith(lines[a_line], ' ')        # 0 spaces
+        @test startswith(lines[b_line], "  ")        # 2 spaces
+        @test startswith(lines[c_line], "    ")      # 4 spaces
+        @test startswith(lines[d_line], "      ")    # 6 spaces
+        
+        # Custom indent
+        result = TOON.encode(obj, options=TOON.EncodeOptions(indent=4))
+        lines = split(result, '\n')
+        
+        a_line = findfirst(l -> occursin("a:", l), lines)
+        b_line = findfirst(l -> occursin("b:", l), lines)
+        c_line = findfirst(l -> occursin("c:", l), lines)
+        d_line = findfirst(l -> occursin("d: 1", l), lines)
+        
+        @test !startswith(lines[a_line], ' ')        # 0 spaces
+        @test startswith(lines[b_line], "    ")      # 4 spaces
+        @test startswith(lines[c_line], "        ")  # 8 spaces
+        @test startswith(lines[d_line], "            ")  # 12 spaces
+    end
+    
+    @testset "Requirement 5.4: Decoder requires colon after each key" begin
+        # Valid key-value pairs
+        @test_nowarn TOON.decode("name: Alice")
+        @test_nowarn TOON.decode("age: 30")
+        @test_nowarn TOON.decode("nested:\n  value: 1")
+        
+        # Missing colon in strict mode should error
+        @test_throws Exception TOON.decode("name Alice", options=TOON.DecodeOptions(strict=true))
+        @test_throws Exception TOON.decode("age 30", options=TOON.DecodeOptions(strict=true))
+        
+        # Missing colon in nested object
+        @test_throws Exception TOON.decode("parent:\n  child value", options=TOON.DecodeOptions(strict=true))
+        
+        # Non-strict mode treats single line without colon as primitive
+        result = TOON.decode("name Alice", options=TOON.DecodeOptions(strict=false))
+        @test result == "name Alice"  # Single primitive value
+        
+        # Multiple keys, one missing colon
+        input = "valid: 1\ninvalid no colon\nother: 2"
+        @test_throws Exception TOON.decode(input, options=TOON.DecodeOptions(strict=true))
+    end
+    
+    @testset "Requirement 5.5: Decoder opens nested object at depth +1 for 'key:' lines" begin
+        # Simple nested object
+        input = "user:\n  name: Alice\n  age: 30"
+        result = TOON.decode(input)
+        @test haskey(result, "user")
+        @test isa(result["user"], Dict)
+        @test result["user"]["name"] == "Alice"
+        @test result["user"]["age"] == 30
+        
+        # Empty nested object (key: with nothing after)
+        input = "empty:"
+        result = TOON.decode(input)
+        @test haskey(result, "empty")
+        @test isa(result["empty"], Dict)
+        @test isempty(result["empty"])
+        
+        # Multiple nested levels
+        input = "a:\n  b:\n    c:\n      d: value"
+        result = TOON.decode(input)
+        @test result["a"]["b"]["c"]["d"] == "value"
+        
+        # Mixed primitive and nested
+        input = "name: Alice\naddress:\n  city: NYC\n  zip: 10001\nage: 30"
+        result = TOON.decode(input)
+        @test result["name"] == "Alice"
+        @test result["age"] == 30
+        @test result["address"]["city"] == "NYC"
+        @test result["address"]["zip"] == 10001
+        
+        # Nested object at correct depth
+        input = "parent:\n  child1: value1\n  child2:\n    grandchild: value2"
+        result = TOON.decode(input)
+        @test result["parent"]["child1"] == "value1"
+        @test result["parent"]["child2"]["grandchild"] == "value2"
+    end
+    
+    @testset "Empty object encoding and decoding" begin
+        # Empty root object
+        obj = Dict{String, Any}()
+        result = TOON.encode(obj)
+        @test result == ""
+        
+        decoded = TOON.decode(result)
+        @test isa(decoded, Dict)
+        @test isempty(decoded)
+        
+        # Nested empty objects
+        obj = Dict("a" => Dict{String, Any}(), "b" => Dict{String, Any}())
+        result = TOON.encode(obj)
+        @test occursin("a:", result)
+        @test occursin("b:", result)
+        
+        decoded = TOON.decode(result)
+        @test haskey(decoded, "a")
+        @test haskey(decoded, "b")
+        @test isempty(decoded["a"])
+        @test isempty(decoded["b"])
+    end
+    
+    @testset "Complex nested object round-trip" begin
+        # Complex nested structure
+        obj = Dict(
+            "user" => Dict(
+                "name" => "Alice",
+                "age" => 30,
+                "address" => Dict(
+                    "street" => "123 Main St",
+                    "city" => "NYC",
+                    "zip" => 10001
+                ),
+                "active" => true
+            ),
+            "metadata" => Dict(
+                "created" => "2025-01-01",
+                "updated" => "2025-01-15"
+            )
+        )
+        
+        encoded = TOON.encode(obj)
+        decoded = TOON.decode(encoded)
+        
+        # Verify structure
+        @test decoded["user"]["name"] == "Alice"
+        @test decoded["user"]["age"] == 30
+        @test decoded["user"]["address"]["street"] == "123 Main St"
+        @test decoded["user"]["address"]["city"] == "NYC"
+        @test decoded["user"]["address"]["zip"] == 10001
+        @test decoded["user"]["active"] == true
+        @test decoded["metadata"]["created"] == "2025-01-01"
+        @test decoded["metadata"]["updated"] == "2025-01-15"
+    end
+end

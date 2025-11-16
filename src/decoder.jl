@@ -64,6 +64,12 @@ end
     decode_value_from_lines(cursor::LineCursor, options::DecodeOptions) -> JsonValue
 
 Decode a value from the line cursor.
+
+Root form detection (§5):
+- Root array: first depth-0 line is valid array header with colon
+- Single primitive: exactly one non-empty line, not array header, not key-value
+- Object: default case
+- Empty document: no non-empty lines → empty object
 """
 function decode_value_from_lines(cursor::LineCursor, options::DecodeOptions)::JsonValue
     if !has_more_lines(cursor)
@@ -76,42 +82,84 @@ function decode_value_from_lines(cursor::LineCursor, options::DecodeOptions)::Js
         return Dict{String, Any}()
     end
 
-    # Try to parse as root array header
-    header = try
-        parse_array_header(first_line.content)
-    catch
-        nothing
+    # Root array detection: first depth-0 line is valid array header with colon
+    if first_line.depth == 0
+        header = try
+            parse_array_header(first_line.content)
+        catch
+            nothing
+        end
+
+        if header !== nothing && header.key === nothing
+            # Valid root array header found
+            return decode_array(cursor, options, header)
+        end
     end
 
-    if header !== nothing && header.key === nothing
-        # Root array
-        return decode_array(cursor, options, header)
-    end
-
-    # Check if single primitive
+    # Single primitive detection: exactly one non-empty line, not array header, not key-value
     if length(cursor.lines) == 1 && first_line.depth == 0
         content = first_line.content
 
-        # Check if it's a key-value line
+        # Check if it's a key-value line (has unquoted colon)
         colon_pos = find_first_unquoted(content, ':')
         if colon_pos === nothing
-            # Check if it looks like an array header without colon
-            if options.strict && occursin('[', content) && occursin(']', content)
-                error("Missing colon after array header at line 1")
+            # No colon found - check for common errors in strict mode
+            if options.strict
+                # Check if it looks like an array header without colon
+                if occursin('[', content) && occursin(']', content)
+                    error("Missing colon after array header at line $(first_line.lineNumber)")
+                end
+                
+                # Check if it looks like a key without colon (has spaces but not quoted)
+                if occursin(' ', content) && 
+                   !startswith(content, DOUBLE_QUOTE) && 
+                   !is_boolean_or_null_literal(content) &&
+                   !is_numeric_literal(content)
+                    error("Missing colon after key at line $(first_line.lineNumber)")
+                end
             end
-            # Single primitive - but check if it looks like a key without colon
-            # In strict mode, if there are spaces and it's not a quoted string or valid primitive, error
-            if options.strict && occursin(' ', content) && 
-               !startswith(content, DOUBLE_QUOTE) && 
-               !is_boolean_or_null_literal(content)
-                # Could be a missing colon
-                error("Missing colon after key at line 1")
-            end
+            
+            # Single primitive value
             return parse_primitive(content)
         end
     end
 
-    # Otherwise, decode as object
+    # Multi-primitive validation: in strict mode, error if multiple depth-0 lines without colons
+    # that are not list items or array headers
+    if options.strict && length(cursor.lines) > 1
+        # Count depth-0 lines that are actual primitives (not list items, not key-value, not array headers)
+        primitive_count = 0
+        for line in cursor.lines
+            if line.depth == 0
+                content = line.content
+                colon_pos = find_first_unquoted(content, ':')
+                
+                # Skip if it has a colon (key-value or array header)
+                if colon_pos !== nothing
+                    continue
+                end
+                
+                # Skip if it's a list item marker
+                if startswith(content, LIST_ITEM_MARKER)
+                    continue
+                end
+                
+                # Skip if it looks like an array header (even without colon - will error elsewhere)
+                if occursin('[', content) && occursin(']', content)
+                    continue
+                end
+                
+                # This is a primitive
+                primitive_count += 1
+            end
+        end
+        
+        if primitive_count > 1
+            error("Multiple primitive values at root level are not allowed (found $primitive_count primitives)")
+        end
+    end
+
+    # Default: decode as object
     return decode_object(cursor, -1, options)
 end
 
@@ -280,7 +328,16 @@ function decode_inline_array_data(data_str::AbstractString, header::ArrayHeaderI
     if header.fields !== nothing
         # Inline tabular array - values are row-major
         num_fields = length(header.fields)
-        for i in 1:header.length
+        
+        # Validate that we have the right number of tokens for the declared rows
+        expected_tokens = header.length * num_fields
+        if options.strict && length(tokens) != expected_tokens
+            error("Array length mismatch: expected $(header.length) rows ($(expected_tokens) values), got $(div(length(tokens), num_fields)) rows ($(length(tokens)) values)")
+        end
+        
+        # Build rows from tokens
+        num_rows = div(length(tokens), num_fields)
+        for i in 1:num_rows
             row = JsonObject()
             for (j, field) in enumerate(header.fields)
                 idx = (i-1) * num_fields + j
@@ -297,11 +354,11 @@ function decode_inline_array_data(data_str::AbstractString, header::ArrayHeaderI
         for token in tokens
             push!(result, parse_primitive(strip(token)))
         end
-    end
-
-    # Validate count in strict mode
-    if options.strict && length(result) != header.length
-        error("Array length mismatch: expected $(header.length), got $(length(result))")
+        
+        # Validate count in strict mode
+        if options.strict && length(result) != header.length
+            error("Array length mismatch: expected $(header.length), got $(length(result))")
+        end
     end
 
     return result
@@ -464,11 +521,24 @@ function decode_tabular_array(cursor::LineCursor, options::DecodeOptions,
     end
 
     # Check for blank lines inside the array in strict mode
-    if options.strict
-        end_position = cursor.position - 1
+    if options.strict && header.length > 0
+        # Get the line number of the header (one before start_position)
+        header_line_num = if start_position > 1
+            cursor.lines[start_position - 1].lineNumber
+        else
+            0
+        end
+        
+        # Get the line number of the last row we processed
+        last_row_line_num = if cursor.position > 1 && cursor.position - 1 <= length(cursor.lines)
+            cursor.lines[cursor.position - 1].lineNumber
+        else
+            typemax(Int)
+        end
+        
         for blank in cursor.blankLines
-            if blank.lineNumber > start_position && blank.lineNumber < end_position
-                # Blank line is inside the array
+            # Blank line is inside the array if it's after the header and before/at the last row
+            if blank.lineNumber > header_line_num && blank.lineNumber <= last_row_line_num
                 error("Blank lines are not allowed inside tabular arrays (line $(blank.lineNumber))")
             end
         end
@@ -562,11 +632,25 @@ function decode_list_array(cursor::LineCursor, options::DecodeOptions,
     end
 
     # Check for blank lines inside the array in strict mode
-    if options.strict
-        end_position = cursor.position - 1
+    if options.strict && header.length > 0
+        # Get the line number of the header (one before start_position)
+        header_line_num = if start_position > 1
+            cursor.lines[start_position - 1].lineNumber
+        else
+            0
+        end
+        
+        # Get the line number of the last item we processed
+        last_item_line_num = if cursor.position > 1 && cursor.position - 1 <= length(cursor.lines)
+            cursor.lines[cursor.position - 1].lineNumber
+        else
+            typemax(Int)
+        end
+        
         for blank in cursor.blankLines
-            if blank.lineNumber > start_position && blank.lineNumber < end_position
-                # Blank line is inside the array
+            # Blank line is inside the array if it's after the header and before/at the last item
+            # We use <= for the upper bound to catch blank lines between items
+            if blank.lineNumber > header_line_num && blank.lineNumber <= last_item_line_num
                 error("Blank lines are not allowed inside list arrays (line $(blank.lineNumber))")
             end
         end

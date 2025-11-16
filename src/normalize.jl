@@ -150,6 +150,7 @@ Check if an array qualifies for tabular format:
 - All elements are objects
 - All objects have the same keys
 - All values are primitives
+- Objects are not empty (empty objects use expanded list format)
 """
 function is_tabular_array(arr::AbstractArray)::Bool
     if isempty(arr) || !is_array_of_objects(arr)
@@ -163,6 +164,11 @@ function is_tabular_array(arr::AbstractArray)::Bool
     end
 
     first_keys = Set(keys(first_obj))
+    
+    # Empty objects should use expanded list format, not tabular
+    if isempty(first_keys)
+        return false
+    end
 
     # Check all objects have same keys and all values are primitives
     for obj in arr
