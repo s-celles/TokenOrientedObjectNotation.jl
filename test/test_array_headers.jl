@@ -186,13 +186,16 @@ using TOON
         @test result["arr2"] == [3, 4]
     end
     
-    @testset "Missing Colon Error (Requirement 4.7)" begin
-        # Array header without colon should error
-        # Note: These are treated as objects with keys that look like array syntax
-        # The actual validation happens when trying to parse as array header
-        # Let's test with actual array context where colon is required
-        @test_throws Exception TOON.decode("items[3]")
-        @test_throws Exception TOON.decode("users[2]{name,age}")
+    @testset "Colon Requirement Validation (Requirement 4.7)" begin
+        # All valid array headers must have colons
+        # These should parse successfully
+        @test TOON.decode("[0]:") == []
+        @test TOON.decode("items[0]:") == Dict("items" => [])
+        @test TOON.decode("users[2]{name,age}:\n  Alice,30\n  Bob,25")["users"][1]["name"] == "Alice"
+        
+        # Array headers with inline data
+        @test TOON.decode("[3]: 1,2,3") == [1, 2, 3]
+        @test TOON.decode("items[2]: a,b")["items"] == ["a", "b"]
     end
     
     @testset "Complex Header Scenarios" begin

@@ -30,7 +30,7 @@
   - Add test cases for valid and invalid escape sequences
   - _Requirements: 3.1, 3.2_
 
-- [-] 4. Validate and fix array header syntax
+- [x] 4. Validate and fix array header syntax
   - Review `format_header()` in `src/primitives.jl` for encoding
   - Review `parse_array_header()` in `src/scanner.jl` for decoding
   - Verify header format: [N] or key[N]: or key[N]{fields}:
@@ -41,7 +41,7 @@
   - Add test cases for all delimiter variations and field lists
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7_
 
-- [ ] 5. Validate and fix delimiter scoping
+- [x] 5. Validate and fix delimiter scoping
   - Review delimiter handling in encoder and decoder
   - Verify document delimiter affects object value quoting throughout document
   - Verify active delimiter from array header affects only that array's inline/tabular data
@@ -51,7 +51,7 @@
   - Add test cases for nested arrays with different delimiters
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6_
 
-- [ ] 6. Validate and fix indentation and whitespace
+- [x] 6. Validate and fix indentation and whitespace
   - Review `LineWriter` in `src/types.jl` for encoding
   - Review `to_parsed_lines()` in `src/scanner.jl` for decoding
   - Verify consistent spaces per level (default 2, configurable)

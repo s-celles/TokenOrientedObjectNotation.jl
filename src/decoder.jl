@@ -95,7 +95,18 @@ function decode_value_from_lines(cursor::LineCursor, options::DecodeOptions)::Js
         # Check if it's a key-value line
         colon_pos = find_first_unquoted(content, ':')
         if colon_pos === nothing
-            # Single primitive
+            # Check if it looks like an array header without colon
+            if options.strict && occursin('[', content) && occursin(']', content)
+                error("Missing colon after array header at line 1")
+            end
+            # Single primitive - but check if it looks like a key without colon
+            # In strict mode, if there are spaces and it's not a quoted string or valid primitive, error
+            if options.strict && occursin(' ', content) && 
+               !startswith(content, DOUBLE_QUOTE) && 
+               !is_boolean_or_null_literal(content)
+                # Could be a missing colon
+                error("Missing colon after key at line 1")
+            end
             return parse_primitive(content)
         end
     end
@@ -137,13 +148,20 @@ function expand_dotted_key(result::JsonObject, key::String, value::JsonValue, op
             if options.strict
                 error("Cannot expand path '$key': segment '$segment_str' already exists as non-object")
             end
-            return
+            # In non-strict mode, overwrite with new object
+            current[segment_str] = JsonObject()
         end
         current = current[segment_str]
     end
 
     # Set the final value
     final_key = String(segments[end])
+    # Check if final key already exists as an object and we're trying to set a primitive
+    if haskey(current, final_key) && isa(current[final_key], JsonObject) && !isa(value, JsonObject)
+        if options.strict
+            error("Cannot expand path '$key': segment '$final_key' already exists as object")
+        end
+    end
     current[final_key] = value
 end
 
@@ -163,8 +181,22 @@ function decode_object(cursor::LineCursor, parent_depth::Int, options::DecodeOpt
             break
         end
 
-        # Skip if not at the expected child depth
-        if line.depth != parent_depth + 1
+        # Check if at expected child depth
+        expected_depth = parent_depth + 1
+        
+        # In strict mode, require exact depth match
+        if options.strict && line.depth != expected_depth
+            advance_line!(cursor)
+            continue
+        end
+        
+        # In non-strict mode, if we're at root and see unexpected depth, process it anyway
+        # This handles cases like "   value: 1" with indent=2 (depth=1 instead of 0)
+        if !options.strict && parent_depth == -1 && line.depth > expected_depth
+            # Process it as if it were at the expected depth
+            # Continue processing
+        elseif !options.strict && line.depth > expected_depth
+            # Skip lines that are too deep
             advance_line!(cursor)
             continue
         end
@@ -175,7 +207,13 @@ function decode_object(cursor::LineCursor, parent_depth::Int, options::DecodeOpt
         # Find colon
         colon_pos = find_first_unquoted(content, ':')
         if colon_pos === nothing
-            error("Missing colon after key (line $(line.lineNumber))")
+            if options.strict
+                error("Missing colon after key at line $(line.lineNumber)")
+            else
+                # In non-strict mode, skip the line
+                advance_line!(cursor)
+                continue
+            end
         end
 
         key_str = strip(content[1:colon_pos-1])
@@ -367,6 +405,7 @@ function decode_tabular_array(cursor::LineCursor, options::DecodeOptions,
     end
 
     row_count = 0
+    start_position = cursor.position
 
     while has_more_lines(cursor)
         line = peek_line(cursor)
@@ -387,10 +426,13 @@ function decode_tabular_array(cursor::LineCursor, options::DecodeOptions,
         colon_pos = find_first_unquoted(content, ':')
 
         # Disambiguate: if delimiter comes before colon, it's a row
+        # Also treat lines without colons as rows (they might have missing fields)
         is_row = false
-        if delimiter_pos !== nothing && colon_pos === nothing
+        if colon_pos === nothing
+            # No colon, so it's a row (even if no delimiter)
             is_row = true
-        elseif delimiter_pos !== nothing && colon_pos !== nothing && delimiter_pos < colon_pos
+        elseif delimiter_pos !== nothing && delimiter_pos < colon_pos
+            # Delimiter comes before colon, so it's a row
             is_row = true
         end
 
@@ -400,6 +442,12 @@ function decode_tabular_array(cursor::LineCursor, options::DecodeOptions,
 
         # Parse row
         tokens = parse_delimited_values(content, header.delimiter)
+        
+        # Validate row width in strict mode
+        if options.strict && length(tokens) != length(fields)
+            error("Row width mismatch at line $(line.lineNumber): expected $(length(fields)) fields, got $(length(tokens))")
+        end
+        
         row = JsonObject()
 
         for (i, field) in enumerate(fields)
@@ -410,14 +458,20 @@ function decode_tabular_array(cursor::LineCursor, options::DecodeOptions,
             end
         end
 
-        # Validate row width in strict mode
-        if options.strict && length(tokens) != length(fields)
-            error("Row width mismatch: expected $(length(fields)), got $(length(tokens))")
-        end
-
         push!(result, row)
         row_count += 1
         advance_line!(cursor)
+    end
+
+    # Check for blank lines inside the array in strict mode
+    if options.strict
+        end_position = cursor.position - 1
+        for blank in cursor.blankLines
+            if blank.lineNumber > start_position && blank.lineNumber < end_position
+                # Blank line is inside the array
+                error("Blank lines are not allowed inside tabular arrays (line $(blank.lineNumber))")
+            end
+        end
     end
 
     # Validate count in strict mode
@@ -438,6 +492,7 @@ function decode_list_array(cursor::LineCursor, options::DecodeOptions,
                           header::ArrayHeaderInfo)::JsonArray
     result = JsonArray()
     item_count = 0
+    start_position = cursor.position
 
     while has_more_lines(cursor)
         line = peek_line(cursor)
@@ -448,11 +503,12 @@ function decode_list_array(cursor::LineCursor, options::DecodeOptions,
         end
 
         # Parse list item
-        after_marker = strip(line.content[length(LIST_ITEM_MARKER)+1:end])
+        after_marker = String(strip(line.content[length(LIST_ITEM_MARKER)+1:end]))
 
         # Check what kind of item it is
         if isempty(after_marker)
             # Empty object
+            advance_line!(cursor)
             push!(result, Dict{String, Any}())
         else
             # Try to parse as array header
@@ -463,9 +519,28 @@ function decode_list_array(cursor::LineCursor, options::DecodeOptions,
             end
 
             if item_header !== nothing
-                # Inline array item
-                advance_line!(cursor)
-                push!(result, decode_array(cursor, options, item_header))
+                # Array item - the header was parsed from after_marker
+                # Now we need to check if there's inline data
+                # Find where the header ends (after the colon)
+                colon_pos = find_first_unquoted(after_marker, ':')
+                if colon_pos !== nothing
+                    after_colon = strip(after_marker[colon_pos+1:end])
+                    if !isempty(after_colon)
+                        # Inline array data
+                        advance_line!(cursor)
+                        array_value = decode_inline_array_data(after_colon, item_header, options)
+                        push!(result, array_value)
+                    else
+                        # Multiline array (data on subsequent lines)
+                        advance_line!(cursor)
+                        array_value = decode_multiline_array_data(cursor, item_header, options)
+                        push!(result, array_value)
+                    end
+                else
+                    # No colon found - shouldn't happen for valid array header
+                    advance_line!(cursor)
+                    push!(result, [])
+                end
             else
                 # Check for key-value
                 colon_pos = find_first_unquoted(after_marker, ':')
@@ -484,6 +559,17 @@ function decode_list_array(cursor::LineCursor, options::DecodeOptions,
         end
 
         item_count += 1
+    end
+
+    # Check for blank lines inside the array in strict mode
+    if options.strict
+        end_position = cursor.position - 1
+        for blank in cursor.blankLines
+            if blank.lineNumber > start_position && blank.lineNumber < end_position
+                # Blank line is inside the array
+                error("Blank lines are not allowed inside list arrays (line $(blank.lineNumber))")
+            end
+        end
     end
 
     # Validate count in strict mode

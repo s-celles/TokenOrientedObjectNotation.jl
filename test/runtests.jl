@@ -13,6 +13,9 @@ using TOON
     include("test_security.jl")
     include("test_folding.jl")
     include("test_array_headers.jl")
+    include("test_delimiter_scoping.jl")
+    include("test_indentation.jl")
+    include("test_strict_mode.jl")
 end
 
 @testset "TOON.jl - Basic Tests" begin
