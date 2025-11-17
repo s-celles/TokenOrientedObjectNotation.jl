@@ -661,8 +661,14 @@ function decode_list_array(cursor::LineCursor, options::DecodeOptions,
                                 # Inline array data
                                 obj[first_key] = decode_inline_array_data(after_colon, item_header, options)
                             else
-                                # Multiline array (data on subsequent lines)
-                                obj[first_key] = decode_multiline_array_data(cursor, item_header, options)
+                                # Empty colon - either empty array or multiline array
+                                if item_header.length == 0
+                                    # Empty array
+                                    obj[first_key] = []
+                                else
+                                    # Multiline array (data on subsequent lines)
+                                    obj[first_key] = decode_multiline_array_data(cursor, item_header, options)
+                                end
                             end
 
                             # Parse remaining fields at depth +1
@@ -775,10 +781,16 @@ function decode_list_array(cursor::LineCursor, options::DecodeOptions,
                             array_value = decode_inline_array_data(after_colon, item_header, options)
                             push!(result, array_value)
                         else
-                            # Multiline array (data on subsequent lines)
+                            # Empty colon - either empty array or multiline array
                             advance_line!(cursor)
-                            array_value = decode_multiline_array_data(cursor, item_header, options)
-                            push!(result, array_value)
+                            if item_header.length == 0
+                                # Empty array - no items to read
+                                push!(result, [])
+                            else
+                                # Multiline array (data on subsequent lines)
+                                array_value = decode_multiline_array_data(cursor, item_header, options)
+                                push!(result, array_value)
+                            end
                         end
                     else
                         # No colon found - shouldn't happen for valid array header

@@ -302,16 +302,25 @@ function encode_list_item(value::JsonValue, writer::LineWriter, depth::Int,
                         push!(writer, depth, "$(LIST_ITEM_MARKER)$(header) $(values_str)")
                     end
                 else
-                    # Complex array - put array header on hyphen line (Requirement 12.5)
-                    header = format_header(first_key, length(first_value), options.delimiter)
-                    push!(writer, depth, "$(LIST_ITEM_MARKER)$(header)")
-                    # Encode array contents
-                    if is_array_of_objects(first_value)
-                        for item in first_value
-                            encode_list_item(item, writer, depth + 1, options)
+                    # Complex array - determine format (tabular vs list)
+                    if is_tabular_array(first_value)
+                        # Use tabular format for uniform objects
+                        # Get field names from first object
+                        first_obj = first_value[1]
+                        fields = collect(keys(first_obj))
+                        header = format_header(first_key, length(first_value), options.delimiter, fields)
+                        push!(writer, depth, "$(LIST_ITEM_MARKER)$(header)")
+                        # Write rows
+                        for obj in first_value
+                            row_values = [encode_primitive(obj[field], options.delimiter) for field in fields]
+                            row_str = join_encoded_values(row_values, options.delimiter)
+                            push!(writer, depth + 1, row_str)
                         end
                     else
-                        # Array of arrays or mixed content
+                        # Use list format for non-uniform objects or arrays of arrays
+                        header = format_header(first_key, length(first_value), options.delimiter)
+                        push!(writer, depth, "$(LIST_ITEM_MARKER)$(header)")
+                        # Encode array contents
                         for item in first_value
                             encode_list_item(item, writer, depth + 1, options)
                         end
