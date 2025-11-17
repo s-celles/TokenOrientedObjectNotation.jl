@@ -59,11 +59,13 @@ function encode_key_value_pair(key::String, value::JsonValue, writer::LineWriter
     # 3. num_segments < flattenDepth (we can add one more segment)
     #    flattenDepth=2 means we can output keys with up to 2 segments (a.b)
     #    So we fold when num_segments=1 (to create a.b), but not when num_segments=2
-    should_fold = can_fold && 
-                  is_json_object(value) && 
-                  length(value) == 1 && 
+    should_fold = can_fold &&
+                  is_json_object(value) &&
+                  length(value) == 1 &&
                   num_segments < options.flattenDepth
 
+    # Use the key with prefix only if we're in a folding context
+    # The parent should have already checked if we can fold before adding the prefix
     encoded_key = encode_key(isempty(prefix) ? key : full_key)
 
     if is_json_primitive(value)
@@ -79,9 +81,26 @@ function encode_key_value_pair(key::String, value::JsonValue, writer::LineWriter
         if should_fold && !is_empty_object(value)
             # Check if this is a single-key object (required for folding)
             if length(value) == 1
-                # Continue folding - encode child keys with this key as prefix
-                for (child_key, child_value) in value
-                    encode_key_value_pair(child_key, child_value, writer, depth, options, prefix=full_key)
+                # Before folding, check if the child key can actually be folded
+                # (In safe mode, we can't fold if the child requires quoting)
+                child_key = collect(keys(value))[1]
+                child_can_fold = is_safe_identifier(child_key) && is_valid_unquoted_key(child_key)
+
+                if child_can_fold || options.keyFolding != "safe"
+                    # Continue folding - encode child keys with this key as prefix
+                    for (child_key, child_value) in value
+                        encode_key_value_pair(child_key, child_value, writer, depth, options, prefix=full_key)
+                    end
+                else
+                    # Child can't be folded - stop folding here
+                    push!(writer, depth, "$(encoded_key):")
+                    nested_opts = EncodeOptions(
+                        indent=options.indent,
+                        delimiter=options.delimiter,
+                        keyFolding="off",
+                        flattenDepth=options.flattenDepth
+                    )
+                    encode_object(value, writer, depth + 1, nested_opts)
                 end
             else
                 # Multi-key object - stop folding
