@@ -760,8 +760,17 @@ function decode_list_array(cursor::LineCursor, options::DecodeOptions,
                                 # Decode as inline array
                                 obj[first_key] = decode_inline_array_data(after_colon, item_header, options)
                             else
-                                # Empty array
-                                obj[first_key] = []
+                                # No inline data - check if it's a tabular array or empty
+                                if item_header.length == 0
+                                    # Empty array
+                                    obj[first_key] = []
+                                elseif item_header.fields !== nothing
+                                    # Tabular array - decode rows
+                                    obj[first_key] = decode_multiline_array_data(cursor, item_header, options)
+                                else
+                                    # Non-empty list array without inline data
+                                    obj[first_key] = decode_multiline_array_data(cursor, item_header, options)
+                                end
                             end
                             push!(result, obj)
                         end
