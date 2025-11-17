@@ -124,11 +124,21 @@ function decode_value_from_lines(cursor::LineCursor, options::DecodeOptions)::Js
                 end
                 
                 # Check if it looks like a key without colon (has spaces but not quoted)
-                if occursin(' ', content) && 
-                   !startswith(content, DOUBLE_QUOTE) && 
+                # However, allow it if it's clearly a string value (e.g., contains emoji or special chars)
+                # This is a heuristic - if it has spaces AND looks like natural language text
+                # (not a simple identifier), treat it as a string value
+                if occursin(' ', content) &&
+                   !startswith(content, DOUBLE_QUOTE) &&
                    !is_boolean_or_null_literal(content) &&
                    !is_numeric_literal(content)
-                    error("Missing colon after key at line $(first_line.lineNumber)")
+                    # Allow if it contains non-ASCII characters (like emoji) which indicate it's text
+                    # Or if it has multiple spaces which suggests natural language
+                    has_non_ascii = any(c -> !isascii(c), content)
+                    has_multiple_spaces = count(==(' '), content) >= 2
+
+                    if !has_non_ascii && !has_multiple_spaces
+                        error("Missing colon after key at line $(first_line.lineNumber)")
+                    end
                 end
             end
             
@@ -754,7 +764,9 @@ function decode_list_array(cursor::LineCursor, options::DecodeOptions,
 
                             push!(result, obj)
                         else
-                            # Array field without additional fields - still an object with one field
+                            # Array field - may or may not have additional fields
+                            # For inline arrays, we checked and there are no additional fields
+                            # For multiline arrays, we need to check AFTER decoding
                             obj = JsonObject()
                             if !isempty(after_colon)
                                 # Decode as inline array
@@ -770,6 +782,51 @@ function decode_list_array(cursor::LineCursor, options::DecodeOptions,
                                 else
                                     # Non-empty list array without inline data
                                     obj[first_key] = decode_multiline_array_data(cursor, item_header, options)
+                                end
+
+                                # After decoding multiline array, check for additional fields at depth+1
+                                while has_more_lines(cursor)
+                                    next_line = peek_line(cursor)
+
+                                    # Additional fields should be at depth +1 relative to hyphen
+                                    if next_line.depth != hyphen_line_depth + 1
+                                        break
+                                    end
+
+                                    # Check if it's a list item marker (next item in array)
+                                    if startswith(next_line.content, LIST_ITEM_MARKER)
+                                        break
+                                    end
+
+                                    # Parse key-value pair
+                                    field_colon_pos = find_first_unquoted(next_line.content, ':')
+                                    if field_colon_pos === nothing
+                                        if options.strict
+                                            error("Missing colon after key at line $(next_line.lineNumber)")
+                                        end
+                                        advance_line!(cursor)
+                                        continue
+                                    end
+
+                                    field_key_str = strip(next_line.content[1:field_colon_pos-1])
+                                    field_value_str = strip(next_line.content[field_colon_pos+1:end])
+                                    field_key = parse_key(field_key_str)
+                                    advance_line!(cursor)
+
+                                    if !isempty(field_value_str)
+                                        # Primitive value
+                                        obj[field_key] = parse_primitive(field_value_str)
+                                    else
+                                        # Nested object or array
+                                        nested_line = peek_line(cursor)
+                                        if nested_line !== nothing && nested_line.depth > hyphen_line_depth + 1
+                                            # Nested content
+                                            obj[field_key] = decode_object(cursor, hyphen_line_depth + 1, options)
+                                        else
+                                            # Empty value
+                                            obj[field_key] = JsonObject()
+                                        end
+                                    end
                                 end
                             end
                             push!(result, obj)

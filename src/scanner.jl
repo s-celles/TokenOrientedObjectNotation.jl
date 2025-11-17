@@ -136,8 +136,8 @@ Parse an array header from a content string.
 Returns nothing if not a valid array header.
 """
 function parse_array_header(content::String)::Union{ArrayHeaderInfo, Nothing}
-    # Find opening bracket
-    bracket_start = findfirst('[', content)
+    # Find opening bracket (outside of quotes)
+    bracket_start = find_first_unquoted(content, '[')
     if bracket_start === nothing
         return nothing
     end
