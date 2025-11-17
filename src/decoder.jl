@@ -177,14 +177,17 @@ function decode_value_from_lines(cursor::LineCursor, options::DecodeOptions)::Js
 end
 
 """
-    expand_dotted_key(result::JsonObject, key::String, value::JsonValue, options::DecodeOptions)
+    expand_dotted_key(result::JsonObject, key::String, value::JsonValue, options::DecodeOptions, was_quoted::Bool=false)
 
 Expand a dotted key into nested objects if expandPaths is enabled.
 For example, "a.b.c" with value "x" becomes {"a": {"b": {"c": "x"}}}
+If was_quoted is true, the key will not be expanded even if it contains dots.
 """
-function expand_dotted_key(result::JsonObject, key::String, value::JsonValue, options::DecodeOptions)
+function expand_dotted_key(result::JsonObject, key::String, value::JsonValue, options::DecodeOptions, was_quoted::Bool=false)
     # Check if we should expand this key
+    # Don't expand if the key was explicitly quoted (literal key)
     should_expand = options.expandPaths == "safe" &&
+                    !was_quoted &&
                     occursin('.', key) &&
                     all(is_safe_identifier, split(key, '.'))
 
@@ -291,6 +294,9 @@ function decode_object(cursor::LineCursor, parent_depth::Int, options::DecodeOpt
             nothing
         end
 
+        # Check if the key was quoted (preserve literal dots if quoted)
+        was_quoted = startswith(strip(key_str), DOUBLE_QUOTE)
+
         if array_header !== nothing && array_header.key !== nothing
             # Key contains array syntax like "items[3]:" or "users[2]{name,age}:"
             key = array_header.key
@@ -327,7 +333,7 @@ function decode_object(cursor::LineCursor, parent_depth::Int, options::DecodeOpt
         end
 
         # Use expand_dotted_key to handle path expansion
-        expand_dotted_key(result, key, value, options)
+        expand_dotted_key(result, key, value, options, was_quoted)
     end
 
     return result

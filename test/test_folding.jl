@@ -203,16 +203,15 @@ using TOON
     end
 
     @testset "Path Expansion - Safe Mode" begin
-        # Quoted keys still get expanded if they are safe identifiers
-        # To prevent expansion, use expandPaths="off"
+        # Quoted keys should NOT be expanded (they are literal keys)
+        # Quoting preserves dots as literals
         input = "\"user.id\": 123"
         opts = TOON.DecodeOptions(expandPaths="safe")
         result = TOON.decode(input, options=opts)
-        # "user.id" is parsed to the string "user.id" which contains valid identifier segments
-        # so it WILL be expanded in safe mode
-        @test haskey(result, "user")
-        @test haskey(result["user"], "id")
-        @test result["user"]["id"] == 123
+        # "user.id" was quoted, so it should remain as a literal key
+        @test haskey(result, "user.id")
+        @test result["user.id"] == 123
+        @test !haskey(result, "user")
 
         # Mix of dotted and non-dotted
         input = "user.name: Alice\nemail: alice@example.com"

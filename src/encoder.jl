@@ -166,7 +166,11 @@ function encode_primitive_array(key::Union{String, Nothing}, arr::JsonArray,
     header = format_header(key, length(arr), options.delimiter)
     encoded_values = [encode_primitive(v, options.delimiter) for v in arr]
     values_str = join_encoded_values(encoded_values, options.delimiter)
-    push!(writer, depth, "$(header) $(values_str)")
+    if isempty(values_str)
+        push!(writer, depth, header)
+    else
+        push!(writer, depth, "$(header) $(values_str)")
+    end
 end
 
 """
@@ -210,7 +214,11 @@ function encode_array_of_arrays(key::Union{String, Nothing}, arr::JsonArray,
         inner_header = format_header(nothing, length(inner_arr), options.delimiter)
         encoded_values = [encode_primitive(v, options.delimiter) for v in inner_arr]
         values_str = join_encoded_values(encoded_values, options.delimiter)
-        push!(writer, depth + 1, "$(LIST_ITEM_MARKER)$(inner_header) $(values_str)")
+        if isempty(values_str)
+            push!(writer, depth + 1, "$(LIST_ITEM_MARKER)$(inner_header)")
+        else
+            push!(writer, depth + 1, "$(LIST_ITEM_MARKER)$(inner_header) $(values_str)")
+        end
     end
 end
 
@@ -249,7 +257,11 @@ function encode_list_item(value::JsonValue, writer::LineWriter, depth::Int,
             header = format_header(nothing, length(value), options.delimiter)
             encoded_values = [encode_primitive(v, options.delimiter) for v in value]
             values_str = join_encoded_values(encoded_values, options.delimiter)
-            push!(writer, depth, "$(LIST_ITEM_MARKER)$(header) $(values_str)")
+            if isempty(values_str)
+                push!(writer, depth, "$(LIST_ITEM_MARKER)$(header)")
+            else
+                push!(writer, depth, "$(LIST_ITEM_MARKER)$(header) $(values_str)")
+            end
         else
             # Complex array needs its own header with list marker
             header = format_header(nothing, length(value), options.delimiter)
@@ -279,8 +291,21 @@ function encode_list_item(value::JsonValue, writer::LineWriter, depth::Int,
                 push!(writer, depth, "$(LIST_ITEM_MARKER)$(encoded_key): $(encoded_val)")
             elseif is_json_array(first_value)
                 # Array on first field
-                push!(writer, depth, LIST_ITEM_MARKER[1:end-1])
-                encode_key_value_pair(first_key, first_value, writer, depth + 1, options)
+                # If it's an inline array (primitives), put it on the hyphen line
+                if is_array_of_primitives(first_value)
+                    header = format_header(first_key, length(first_value), options.delimiter)
+                    encoded_values = [encode_primitive(v, options.delimiter) for v in first_value]
+                    values_str = join_encoded_values(encoded_values, options.delimiter)
+                    if isempty(values_str)
+                        push!(writer, depth, "$(LIST_ITEM_MARKER)$(header)")
+                    else
+                        push!(writer, depth, "$(LIST_ITEM_MARKER)$(header) $(values_str)")
+                    end
+                else
+                    # Complex array - put hyphen alone, then encode array below
+                    push!(writer, depth, LIST_ITEM_MARKER[1:end-1])
+                    encode_key_value_pair(first_key, first_value, writer, depth + 1, options)
+                end
             elseif is_json_object(first_value)
                 # Nested object
                 push!(writer, depth, "$(LIST_ITEM_MARKER)$(encoded_key):")

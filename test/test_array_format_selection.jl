@@ -114,7 +114,7 @@ using TOON
         result = TOON.encode(data)
         @test occursin("[3]:", result)
         @test occursin("- [2]: 1,2", result)
-        @test occursin("- [0]: ", result)  # Empty array with space
+        @test occursin("- [0]:", result)  # Empty array (no trailing space)
         @test occursin("- [1]: 3", result)
         
         # Single element array of arrays

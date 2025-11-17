@@ -106,14 +106,13 @@ using TOON
         # Object with array as first field in mixed array
         arr = [1, Dict("items" => [1, 2, 3], "count" => 3)]
         result = TOON.encode(arr)
-        
+
         lines = split(result, '\n')
-        # Array on first field - hyphen alone, then array at depth +1
-        @test any(l -> strip(l) == "-", lines)
-        @test any(l -> occursin("items[3]: 1,2,3", l), lines)
+        # Array on first field - inline array on the hyphen line (per spec fixtures)
+        @test any(l -> occursin("- items[3]: 1,2,3", l), lines)
         # Remaining fields at depth +1
         @test any(l -> occursin("count: 3", l), lines)
-        
+
         # Decode and verify
         decoded = TOON.decode(result)
         @test decoded[1] == 1
