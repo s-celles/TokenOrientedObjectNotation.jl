@@ -633,27 +633,158 @@ function decode_list_array(cursor::LineCursor, options::DecodeOptions,
             end
 
             if item_header !== nothing
-                # Array item - the header was parsed from after_marker
-                # Now we need to check if there's inline data
-                # Find where the header ends (after the colon)
+                # Array header found
                 colon_pos = find_first_unquoted(after_marker, ':')
-                if colon_pos !== nothing
-                    after_colon = strip(after_marker[colon_pos+1:end])
-                    if !isempty(after_colon)
-                        # Inline array data
+
+                if item_header.key !== nothing
+                    # Array as first field of an object (Requirement 12.5)
+                    # e.g., "- items[3]: 1,2,3" followed potentially by other fields
+                    first_key = item_header.key
+                    hyphen_line_depth = line.depth
+
+                    if colon_pos !== nothing
+                        after_colon = strip(after_marker[colon_pos+1:end])
                         advance_line!(cursor)
-                        array_value = decode_inline_array_data(after_colon, item_header, options)
-                        push!(result, array_value)
+
+                        # Check if there are additional fields at depth +1
+                        next_line = peek_line(cursor)
+                        has_additional_fields = (next_line !== nothing &&
+                                                 next_line.depth == hyphen_line_depth + 1 &&
+                                                 !startswith(next_line.content, LIST_ITEM_MARKER))
+
+                        if has_additional_fields
+                            # This is an object with an array as first field
+                            obj = JsonObject()
+
+                            # Decode the array value
+                            if !isempty(after_colon)
+                                # Inline array data
+                                obj[first_key] = decode_inline_array_data(after_colon, item_header, options)
+                            else
+                                # Multiline array (data on subsequent lines)
+                                obj[first_key] = decode_multiline_array_data(cursor, item_header, options)
+                            end
+
+                            # Parse remaining fields at depth +1
+                            while has_more_lines(cursor)
+                                next_line = peek_line(cursor)
+
+                                # Remaining fields should be at depth +1 relative to hyphen
+                                if next_line.depth != hyphen_line_depth + 1
+                                    break
+                                end
+
+                                # Check if it's a list item marker (next item in array)
+                                if startswith(next_line.content, LIST_ITEM_MARKER)
+                                    break
+                                end
+
+                                # Parse key-value pair
+                                field_colon_pos = find_first_unquoted(next_line.content, ':')
+                                if field_colon_pos === nothing
+                                    if options.strict
+                                        error("Missing colon after key at line $(next_line.lineNumber)")
+                                    end
+                                    advance_line!(cursor)
+                                    continue
+                                end
+
+                                field_key_str = strip(next_line.content[1:field_colon_pos-1])
+                                field_value_str = strip(next_line.content[field_colon_pos+1:end])
+
+                                # Check if the key contains an array header
+                                field_header = try
+                                    parse_array_header(field_key_str * ":")
+                                catch
+                                    nothing
+                                end
+
+                                if field_header !== nothing && field_header.key !== nothing
+                                    # Key contains array syntax like "tags[2]:"
+                                    field_key = field_header.key
+                                    advance_line!(cursor)
+
+                                    if !isempty(field_value_str)
+                                        # Inline array data
+                                        obj[field_key] = decode_inline_array_data(field_value_str, field_header, options)
+                                    else
+                                        # Multiline array data
+                                        obj[field_key] = decode_multiline_array_data(cursor, field_header, options)
+                                    end
+                                else
+                                    # Regular key-value pair
+                                    field_key = parse_key(field_key_str)
+                                    advance_line!(cursor)
+
+                                    if !isempty(field_value_str)
+                                        # Primitive value
+                                        obj[field_key] = parse_primitive(field_value_str)
+                                    else
+                                        # Nested object or array
+                                        nested_line = peek_line(cursor)
+
+                                        if nested_line !== nothing && nested_line.depth > hyphen_line_depth + 1
+                                            # Check if it's an array header
+                                            nested_header = try
+                                                parse_array_header(nested_line.content)
+                                            catch
+                                                nothing
+                                            end
+
+                                            if nested_header !== nothing
+                                                # Array value
+                                                obj[field_key] = decode_array(cursor, options, nested_header)
+                                            else
+                                                # Nested object
+                                                obj[field_key] = decode_object(cursor, hyphen_line_depth + 1, options)
+                                            end
+                                        else
+                                            # Empty value
+                                            obj[field_key] = JsonObject()
+                                        end
+                                    end
+                                end
+                            end
+
+                            push!(result, obj)
+                        else
+                            # Array field without additional fields - still an object with one field
+                            obj = JsonObject()
+                            if !isempty(after_colon)
+                                # Decode as inline array
+                                obj[first_key] = decode_inline_array_data(after_colon, item_header, options)
+                            else
+                                # Empty array
+                                obj[first_key] = []
+                            end
+                            push!(result, obj)
+                        end
                     else
-                        # Multiline array (data on subsequent lines)
+                        # No colon found - shouldn't happen for valid array header
                         advance_line!(cursor)
-                        array_value = decode_multiline_array_data(cursor, item_header, options)
-                        push!(result, array_value)
+                        push!(result, [])
                     end
                 else
-                    # No colon found - shouldn't happen for valid array header
-                    advance_line!(cursor)
-                    push!(result, [])
+                    # Bare array item (no key) - e.g., "- [2]: 1,2"
+                    # This is just a standalone array, not an object
+                    if colon_pos !== nothing
+                        after_colon = strip(after_marker[colon_pos+1:end])
+                        if !isempty(after_colon)
+                            # Inline array data
+                            advance_line!(cursor)
+                            array_value = decode_inline_array_data(after_colon, item_header, options)
+                            push!(result, array_value)
+                        else
+                            # Multiline array (data on subsequent lines)
+                            advance_line!(cursor)
+                            array_value = decode_multiline_array_data(cursor, item_header, options)
+                            push!(result, array_value)
+                        end
+                    else
+                        # No colon found - shouldn't happen for valid array header
+                        advance_line!(cursor)
+                        push!(result, [])
+                    end
                 end
             else
                 # Check for key-value
