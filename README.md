@@ -44,7 +44,7 @@ using TokenOrientedObjectNotation
 
 # Simple object
 data = Dict("name" => "Alice", "age" => 30)
-toon_str = TOON.encode(data)
+toon_str = TokenOrientedObjectNotation.encode(data)
 println(toon_str)
 # name: Alice
 # age: 30
@@ -54,7 +54,7 @@ users = [
     Dict("id" => 1, "name" => "Alice", "role" => "admin"),
     Dict("id" => 2, "name" => "Bob", "role" => "user")
 ]
-toon_str = TOON.encode(Dict("users" => users))
+toon_str = TokenOrientedObjectNotation.encode(Dict("users" => users))
 println(toon_str)
 # users[2]{id,name,role}:
 #   1,Alice,admin
@@ -68,12 +68,12 @@ using TokenOrientedObjectNotation
 
 # Decode a simple object
 input = "name: Alice\nage: 30"
-data = TOON.decode(input)
+data = TokenOrientedObjectNotation.decode(input)
 # Dict("name" => "Alice", "age" => 30)
 
 # Decode an array
 input = "[3]: 1,2,3"
-data = TOON.decode(input)
+data = TokenOrientedObjectNotation.decode(input)
 # [1, 2, 3]
 ```
 
@@ -83,24 +83,24 @@ data = TOON.decode(input)
 using TokenOrientedObjectNotation
 
 # Encoding with custom options
-options = TOON.EncodeOptions(
+options = TokenOrientedObjectNotation.EncodeOptions(
     indent = 4,                    # Use 4 spaces per indentation level
-    delimiter = TOON.TAB,          # Use tab as delimiter
+    delimiter = TokenOrientedObjectNotation.TAB,          # Use tab as delimiter
     keyFolding = "safe",           # Enable key folding
     flattenDepth = 2               # Limit folding depth
 )
 
 data = Dict("user" => Dict("name" => "Alice"))
-toon_str = TOON.encode(data, options=options)
+toon_str = TokenOrientedObjectNotation.encode(data, options=options)
 
 # Decoding with custom options
-options = TOON.DecodeOptions(
+options = TokenOrientedObjectNotation.DecodeOptions(
     indent = 4,                    # Expect 4 spaces per level
     strict = true,                 # Enable strict validation
     expandPaths = "safe"           # Enable path expansion
 )
 
-data = TOON.decode(toon_str, options=options)
+data = TokenOrientedObjectNotation.decode(toon_str, options=options)
 ```
 
 ## Examples
@@ -145,7 +145,7 @@ data = Dict(
     )
 )
 
-println(TOON.encode(data))
+println(TokenOrientedObjectNotation.encode(data))
 # server:
 #   host: localhost
 #   port: 8080
@@ -164,15 +164,15 @@ using TokenOrientedObjectNotation
 data = Dict("api" => Dict("v1" => Dict("users" => Dict("endpoint" => "/api/v1/users"))))
 
 # Without key folding (default)
-println(TOON.encode(data))
+println(TokenOrientedObjectNotation.encode(data))
 # api:
 #   v1:
 #     users:
 #       endpoint: /api/v1/users
 
 # With key folding
-options = TOON.EncodeOptions(keyFolding="safe")
-println(TOON.encode(data, options=options))
+options = TokenOrientedObjectNotation.EncodeOptions(keyFolding="safe")
+println(TokenOrientedObjectNotation.encode(data, options=options))
 # api.v1.users.endpoint: /api/v1/users
 ```
 
@@ -183,16 +183,16 @@ using TokenOrientedObjectNotation
 
 # Decode with path expansion
 input = "api.v1.users.endpoint: /api/v1/users"
-options = TOON.DecodeOptions(expandPaths="safe")
-data = TOON.decode(input, options=options)
+options = TokenOrientedObjectNotation.DecodeOptions(expandPaths="safe")
+data = TokenOrientedObjectNotation.decode(input, options=options)
 # Dict("api" => Dict("v1" => Dict("users" => Dict("endpoint" => "/api/v1/users"))))
 
 # Round-trip: folding + expansion
-encode_opts = TOON.EncodeOptions(keyFolding="safe")
-decode_opts = TOON.DecodeOptions(expandPaths="safe")
+encode_opts = TokenOrientedObjectNotation.EncodeOptions(keyFolding="safe")
+decode_opts = TokenOrientedObjectNotation.DecodeOptions(expandPaths="safe")
 original = Dict("a" => Dict("b" => Dict("c" => 42)))
-encoded = TOON.encode(original, options=encode_opts)  # "a.b.c: 42"
-decoded = TOON.decode(encoded, options=decode_opts)   # Reconstructs original structure
+encoded = TokenOrientedObjectNotation.encode(original, options=encode_opts)  # "a.b.c: 42"
+decoded = TokenOrientedObjectNotation.decode(encoded, options=decode_opts)   # Reconstructs original structure
 ```
 
 ### Different Delimiters
@@ -206,21 +206,21 @@ users = [
 ]
 
 # Comma delimiter (default)
-println(TOON.encode(Dict("users" => users)))
+println(TokenOrientedObjectNotation.encode(Dict("users" => users)))
 # users[2]{name,role}:
 #   Alice,admin
 #   Bob,user
 
 # Tab delimiter
-options = TOON.EncodeOptions(delimiter=TOON.TAB)
-println(TOON.encode(Dict("users" => users), options=options))
+options = TokenOrientedObjectNotation.EncodeOptions(delimiter=TokenOrientedObjectNotation.TAB)
+println(TokenOrientedObjectNotation.encode(Dict("users" => users), options=options))
 # users[2	]{name	role}:
 #   Alice	admin
 #   Bob	user
 
 # Pipe delimiter
-options = TOON.EncodeOptions(delimiter=TOON.PIPE)
-println(TOON.encode(Dict("users" => users), options=options))
+options = TokenOrientedObjectNotation.EncodeOptions(delimiter=TokenOrientedObjectNotation.PIPE)
+println(TokenOrientedObjectNotation.encode(Dict("users" => users), options=options))
 # users[2|]{name|role}:
 #   Alice|admin
 #   Bob|user
@@ -234,14 +234,14 @@ using TokenOrientedObjectNotation
 # Strict mode catches errors (default)
 input = "[3]: 1,2"  # Declares 3 items but only has 2
 try
-    TOON.decode(input)  # strict=true by default
+    TokenOrientedObjectNotation.decode(input)  # strict=true by default
 catch e
     println(e)  # "Array length mismatch: expected 3, got 2"
 end
 
 # Non-strict mode is lenient
-options = TOON.DecodeOptions(strict=false)
-result = TOON.decode(input, options=options)  # [1, 2] - accepts actual count
+options = TokenOrientedObjectNotation.DecodeOptions(strict=false)
+result = TokenOrientedObjectNotation.decode(input, options=options)  # [1, 2] - accepts actual count
 ```
 
 ## API Reference
