@@ -22,7 +22,6 @@ makedocs(
         "Examples" => "examples.md",
         "API Reference" => "api.md",
         "Compliance" => "compliance.md",
-        "Contributing" => "contributing.md",
     ],
 )
 

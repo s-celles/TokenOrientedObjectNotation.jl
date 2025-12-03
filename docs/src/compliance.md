@@ -271,16 +271,6 @@ All §14 error scenarios:
 
 **Impact:** Minimal - works correctly for standard UTF-8
 
-## Validation Reports
-
-Detailed validation reports are available:
-
-- [COMPLIANCE_VALIDATION_REPORT.md](https://github.com/s-celles/TokenOrientedObjectNotation.jl/blob/main/COMPLIANCE_VALIDATION_REPORT.md) - Overall compliance
-- [PATH_EXPANSION_VALIDATION.md](https://github.com/s-celles/TokenOrientedObjectNotation.jl/blob/main/PATH_EXPANSION_VALIDATION.md) - Path expansion feature
-- [STRICT_MODE_VALIDATION.md](https://github.com/s-celles/TokenOrientedObjectNotation.jl/blob/main/STRICT_MODE_VALIDATION.md) - Strict mode errors
-- [TABULAR_ARRAY_VALIDATION.md](https://github.com/s-celles/TokenOrientedObjectNotation.jl/blob/main/TABULAR_ARRAY_VALIDATION.md) - Tabular arrays
-- [test/COMPLIANCE_TEST_COVERAGE.md](https://github.com/s-celles/TokenOrientedObjectNotation.jl/blob/main/test/COMPLIANCE_TEST_COVERAGE.md) - Test coverage details
-
 ## Specification Links
 
 - **Official Specification:** [SPEC.md](https://github.com/toon-format/spec/blob/main/SPEC.md)

@@ -5,8 +5,7 @@
 [![codecov](https://codecov.io/gh/s-celles/TokenOrientedObjectNotation.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/s-celles/TokenOrientedObjectNotation.jl)
 [![Aqua QA](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 [![SPEC v2.0](https://img.shields.io/badge/spec-v2.0-lightgrey)](https://github.com/toon-format/spec/blob/main/SPEC.md)
-[![Compliance](https://img.shields.io/badge/compliance-100%25-brightgreen)](./COMPLIANCE_VALIDATION_REPORT.md)
-[![Tests](https://img.shields.io/badge/tests-1750%20passing-brightgreen)](./test/COMPLIANCE_TEST_COVERAGE.md)
+[![Compliance](https://img.shields.io/badge/compliance-87.6%25-yellow)](https://github.com/s-celles/TokenOrientedObjectNotation.jl/issues?q=is%3Aissue+is%3Aopen+label%3Aspec-compliance)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 Julia implementation of **Token-Oriented Object Notation (TOON)**, a compact, human-readable serialization format optimized for LLM contexts.
@@ -348,8 +347,6 @@ The test suite includes:
 - **Error Conditions:** All §14 error scenarios (57 tests)
 - **Integration Tests:** Real-world usage patterns (546 tests)
 
-See [COMPLIANCE_VALIDATION_REPORT.md](./COMPLIANCE_VALIDATION_REPORT.md) for detailed validation results.
-
 ## Performance
 
 TOON achieves significant token reduction compared to JSON:
@@ -367,6 +364,16 @@ users = [
     Dict("id" => 2, "name" => "Bob", "email" => "bob@example.com", "active" => false)
 ]
 ```
+
+## Known Issues
+
+While our internal test suite (1750 tests) validates full TOON Specification v2.0 compliance for the core implementation, testing against the official specification fixtures reveals some implementation gaps:
+
+- **Fixture Compliance:** 87.6% (298/340 tests passing, 37 failing, 5 erroring)
+- **Critical Issues (P0):** Unicode string indexing crashes, large number handling errors
+- **High Priority (P1):** Quoted key handling, key order preservation, floating-point precision
+- **Medium Priority (P2):** Array format selection refinement, list item structure encoding
+- **Low Priority (P3):** Delimiter scoping edge cases, path expansion with quoted keys
 
 ## Documentation
 
@@ -389,7 +396,7 @@ Then open `docs/build/index.html` in your browser.
 
 ## Contributing
 
-Contributions are welcome! See [CONTRIBUTING.md](docs/src/contributing.md) for guidelines.
+Contributions are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
 ### Development
 
@@ -411,9 +418,8 @@ julia --project=. test/test_encoder.jl
 
 ## Related Projects
 
-- [Official TOON Specification](https://github.com/toon-format/spec)
-- [TypeScript/JavaScript Implementation](https://github.com/toon-format/toon)
-- [Python Implementation](https://github.com/toon-format/toon-python)
+- [Official TOON Specification](https://github.com/toon-format/spec) - Specification and test fixtures
+- [toon](https://github.com/toon-format/toon) - TypeScript/JavaScript implementation
 
 ## Links
 

@@ -1,8 +1,6 @@
 # TokenOrientedObjectNotation.jl
 
 [![SPEC v2.0](https://img.shields.io/badge/spec-v2.0-lightgrey)](https://github.com/toon-format/spec/blob/main/SPEC.md)
-[![Compliance](https://img.shields.io/badge/compliance-100%25-brightgreen)](https://github.com/s-celles/TokenOrientedObjectNotation.jl/blob/main/COMPLIANCE_VALIDATION_REPORT.md)
-[![Tests](https://img.shields.io/badge/tests-1750%20passing-brightgreen)](https://github.com/s-celles/TokenOrientedObjectNotation.jl/blob/main/test/COMPLIANCE_TEST_COVERAGE.md)
 
 Julia implementation of **Token-Oriented Object Notation (TOON)**, a compact, human-readable serialization format optimized for LLM contexts.
 
