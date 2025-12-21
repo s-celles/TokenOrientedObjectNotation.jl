@@ -333,7 +333,7 @@ Run the comprehensive test suite (1750 tests):
 
 ```julia
 using Pkg
-Pkg.test("TOON")
+Pkg.test("ToonFormat")
 ```
 
 ### Test Coverage
