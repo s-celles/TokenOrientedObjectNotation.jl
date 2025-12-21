@@ -388,19 +388,19 @@ function encode_list_item(value::JsonValue, writer::LineWriter, depth::Int,
                         fields = collect(keys(first_obj))
                         header = format_header(first_key, length(first_value), options.delimiter, fields)
                         push!(writer, depth, "$(LIST_ITEM_MARKER)$(header)")
-                        # Write rows
+                        # Write rows at depth + 2 (per spec §10: tabular rows inside list-item objects)
                         for obj in first_value
                             row_values = [encode_primitive(obj[field], options.delimiter) for field in fields]
                             row_str = join_encoded_values(row_values, options.delimiter)
-                            push!(writer, depth + 1, row_str)
+                            push!(writer, depth + 2, row_str)
                         end
                     else
                         # Use list format for non-uniform objects or arrays of arrays
                         header = format_header(first_key, length(first_value), options.delimiter)
                         push!(writer, depth, "$(LIST_ITEM_MARKER)$(header)")
-                        # Encode array contents
+                        # Encode array contents at depth + 2 (per spec §10: list items inside list-item objects)
                         for item in first_value
-                            encode_list_item(item, writer, depth + 1, options)
+                            encode_list_item(item, writer, depth + 2, options)
                         end
                     end
                 end

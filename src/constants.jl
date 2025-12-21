@@ -59,4 +59,4 @@ const CHARS_TO_ESCAPE = Dict(
 const UNQUOTED_KEY_PATTERN = r"^[A-Za-z_][A-Za-z0-9_.]*$"
 const IDENTIFIER_SEGMENT_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]*$"
 const NUMERIC_PATTERN = r"^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$"
-const LEADING_ZERO_PATTERN = r"^0\d+$"
+const LEADING_ZERO_PATTERN = r"^-?0\d+$"

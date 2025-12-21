@@ -23,3 +23,4 @@ Thumbs.db
 # AI files
 .claude
 .specify
+specs/
