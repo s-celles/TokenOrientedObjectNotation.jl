@@ -2,7 +2,7 @@
 # https://github.com/toon-format/spec
 
 [toon_spec]
-git-tree-sha1 = "09aaa2fc8301ae69c23c2a382e34328de3d08a5b"
+git-tree-sha1 = "fd47fe7b2c0ce1b72c4432d053f76354c1fda790"
 lazy = true
 
     [[toon_spec.download]]
